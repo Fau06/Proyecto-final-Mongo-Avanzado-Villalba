@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Editar Producto</title>
+</head>
+<body>
+    <h1>Editar Producto</h1>
+    <form id="edit-product-form">
+        <input type="hidden" id="productId" name="productId">
+        <input type="text" id="title" name="title" placeholder="Título" required>
+        <input type="text" id="description" name="description" placeholder="Descripción" required>
+        <input type="text" id="code" name="code" placeholder="Código" required>
+        <input type="number" id="price" name="price" placeholder="Precio" required>
+        <input type="number" id="stock" name="stock" placeholder="Stock" required>
+        <input type="text" id="category" name="category" placeholder="Categoría" required>
+        <button type="submit">Guardar Cambios</button>
+    </form>
+
+    <script>
+        async function fetchProduct(productId) {
+            const response = await fetch(`/api/products/${productId}`);
+            const product = await response.json();
+            document.getElementById('productId').value = product._id;
+            document.getElementById('title').value = product.title;
+            document.getElementById('description').value = product.description;
+            document.getElementById('code').value = product.code;
+            document.getElementById('price').value = product.price;
+            document.getElementById('stock').value = product.stock;
+            document.getElementById('category').value = product.category;
+        }
+
+        document.getElementById('edit-product-form').addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const productId = document.getElementById('productId').value;
+            const updatedProduct = {
+                title: document.getElementById('title').value,
+                description: document.getElementById('description').value,
+                code: document.getElementById('code').value,
+                price: document.getElementById('price').value,
+                stock: document.getElementById('stock').value,
+                category: document.getElementById('category').value,
+            };
+
+            try {
+                const response = await fetch(`/api/products/${productId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(updatedProduct),
+                });
+
+                if (!response.ok) throw new Error('Error al actualizar el producto');
+                alert('Producto actualizado con éxito');
+                window.location.href = '/'; // Redirigir a la lista de productos
+            } catch (error) {
+                console.error(error.message);
+                alert('Error al actualizar el producto');
+            }
+        });
+
+        // Obtener el ID del producto de la URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const productId = urlParams.get('id');
+        fetchProduct(productId);
+    </script>
+</body>
+</html>

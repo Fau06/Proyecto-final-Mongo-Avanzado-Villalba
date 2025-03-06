@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Productos en Tiempo Real</title>
+    <style>
+        .card {
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            padding: 10px;
+            margin: 10px;
+            display: inline-block;
+            width: 200px;
+            text-align: center;
+        }
+        .card img {
+            max-width: 100%;
+            height: auto;
+        }
+        .pagination {
+            text-align: center;
+            margin-top: 20px;
+        }
+        .pagination button {
+            margin: 0 5px;
+        }
+        #filter-form {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        #categoryList {
+            position: relative;
+            background: white;
+            border: 1px solid #ccc;
+            padding: 5px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <h1>Agregar Producto</h1>
+    <form id="product-form">
+        <input type="text" name="title" placeholder="Título" required>
+        <input type="text" name="description" placeholder="Descripción" required>
+        <input type="text" name="code" placeholder="Código" required>
+        <input type="number" name="price" placeholder="Precio" required>
+        <input type="number" name="stock" placeholder="Stock" required>
+        <input type="text" name="category" placeholder="Categoría" required>
+        <button type="submit">Agregar Producto</button>
+    </form>
+
+    <h1>Lista de Productos</h1>
+
+    <!-- Filter Form -->
+    <div id="filter-form">
+        <input type="number" id="minPrice" placeholder="Precio Mínimo">
+        <input type="number" id="maxPrice" placeholder="Precio Máximo">
+        <label>
+            <input type="checkbox" id="inStock"> Solo en Stock
+        </label>
+        <button id="categoryAccordion">Categorías</button>
+        <div id="categoryList">
+            <ul id="categoryOptions"></ul>
+        </div>
+        <button id="applyFilters">Aplicar Filtros</button>
+        <button id="clearFilters">Limpiar Filtros</button>
+    </div>
+
+    <div id="product-list"></div>
+    <div class="pagination" id="pagination"></div>
+
+    <script>
+        let currentPage = 1;
+        const limit = 10;
+
+        async function fetchProducts(page, filters = '') {
+            const response = await fetch(`/api/products?limit=${limit}&page=${page}&${filters}`);
+            return await response.json();
+        }
+
+        async function renderProducts(page, filters = '') {
+            const data = await fetchProducts(page, filters);
+            const productList = document.getElementById('product-list');
+            productList.innerHTML = '';
+
+            data.payload.forEach(product => {
+                const card = document.createElement('div');
+                card.className = 'card';
+                card.innerHTML = `
+                    <h3>${product.title}</h3>
+                    <p>${product.description}</p>
+                    <p>Precio: $${product.price}</p>
+                    <button onclick="deleteProduct('${product._id}')">Eliminar</button>
+                `;
+                productList.appendChild(card);
+            });
+
+            renderPagination(data, filters);
+        }
+
+        function renderPagination(data, filters) {
+            const pagination = document.getElementById('pagination');
+            pagination.innerHTML = '';
+
+            for (let i = 1; i <= data.totalPages; i++) {
+                const button = document.createElement('button');
+                button.innerText = i;
+                button.onclick = () => renderProducts(i, filters);
+                pagination.appendChild(button);
+            }
+        }
+
+        // Función para eliminar un producto
+        async function deleteProduct(productId) {
+            const confirmDelete = confirm("¿Estás seguro de que deseas eliminar este producto?");
+            if (confirmDelete) {
+                try {
+                    const response = await fetch(`/api/products/${productId}`, {
+                        method: 'DELETE',
+                    });
+                    if (!response.ok) throw new Error('Error al eliminar el producto');
+                    alert('Producto eliminado con éxito');
+                    renderProducts(currentPage); // Volver a renderizar la lista de productos
+                } catch (error) {
+                    console.error(error.message);
+                    alert('Error al eliminar el producto');
+                }
+            }
+        }
+
+        document.getElementById('applyFilters').addEventListener('click', async () => {
+            const selectedCategory = document.querySelector('input[name="category"]:checked');
+            const category = selectedCategory ? selectedCategory.value : '';
+            const minPrice = document.getElementById('minPrice').value;
+            const maxPrice = document.getElementById('maxPrice').value;
+            const inStock = document.getElementById('inStock').checked;
+
+            const queryParams = new URLSearchParams();
+            if (category) queryParams.append('query', category);
+            if (minPrice) queryParams.append('minPrice', minPrice);
+            if (maxPrice) queryParams.append('maxPrice', maxPrice);
+            if (inStock) queryParams.append('inStock', true);
+
+            currentPage = 1;
+            await renderProducts(currentPage, queryParams.toString());
+        });
+
+        document.getElementById('clearFilters').addEventListener('click', () => {
+            document.getElementById('minPrice').value = '';
+            document.getElementById('maxPrice').value = '';
+            document.getElementById('inStock').checked = false;
+            document.querySelectorAll('input[name="category"]').forEach(el => el.checked = false);
+
+            currentPage = 1;
+            renderProducts(currentPage);
+        });
+
+        document.getElementById('categoryAccordion').addEventListener('click', () => {
+            const categoryList = document.getElementById('categoryList');
+            categoryList.style.display = categoryList.style.display === 'none' ? 'block' : 'none';
+        });
+
+        async function loadCategories() {
+            try {
+                const response = await fetch('/api/products/categories');
+                if (!response.ok) throw new Error('Error al cargar categorías');
+                const categories = await response.json();
+                const categoryOptions = document.getElementById('categoryOptions');
+                categoryOptions.innerHTML = '';
+
+                categories.forEach(category => {
+                    const li = document.createElement('li');
+                    li.innerHTML = `<input type="radio" name="category" value="${category}"> ${category}`;
+                    categoryOptions.appendChild(li);
+                });
+            } catch (error) {
+                console.error(error.message);
+            }
+        }
+
+        loadCategories();
+        renderProducts(currentPage);
+
+        document.getElementById('product-form').addEventListener('submit', async (event) => {
+            event.preventDefault(); // Evitar el comportamiento por defecto del formulario
+
+            const formData = new FormData(event.target);
+            const productData = Object.fromEntries(formData);
+
+            try {
+                const response = await fetch('/api/products', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(productData),
+                });
+
+                if (!response.ok) throw new Error('Error al agregar el producto');
+                alert('Producto agregado con éxito');
+                renderProducts(currentPage); // Volver a renderizar la lista de productos
+            } catch (error) {
+                console.error(error.message);
+                alert('Error al agregar el producto');
+            }
+        });
+    </script>
+</body>
+</html>
